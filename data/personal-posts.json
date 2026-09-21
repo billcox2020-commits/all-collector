@@ -1,6 +1,24 @@
 {
   "items": [
     {
+      "id": "ARCHIVE-MUANM8N6",
+      "category": "shoes",
+      "category_locked": true,
+      "source": "personal",
+      "title": "Nike Air Force 1 cvs",
+      "year": null,
+      "size": "265",
+      "image": "assets/uploads/20260921-archive-muanm8n6-1.jpg",
+      "gallery": [
+        "assets/uploads/20260921-archive-muanm8n6-2.jpg"
+      ],
+      "price_krw": null,
+      "show_price": false,
+      "status": "archive",
+      "description": "Foot locker \n\n1994 Nike Air Force 1\n\nUs 8.5",
+      "published_at": null
+    },
+    {
       "id": "TNF-BALTORO-RED-001",
       "category": "outer",
       "brand": "THE NORTH FACE",
