@@ -1,7 +1,7 @@
 'use strict';
 
 const OWNER='billcox2020-commits';
-const REPO='-vintage-archive';
+const REPO='all-collector';
 const BRANCH='main';
 const PATHS={personal:'data/personal-posts.json',active:'data/bunjang-active.json',changes:'data/admin-overrides.json'};
 const API='https://api.github.com';
