@@ -1,6 +1,27 @@
 {
   "items": [
     {
+      "id": "ARCHIVE-MUAS2YSK",
+      "category": "etc",
+      "category_locked": true,
+      "brand": "Armani",
+      "source": "personal",
+      "title": "Armani Jeans Fittied long bill hat",
+      "year": 1993,
+      "size": "L",
+      "image": "assets/uploads/20260921-archive-muas2ysk-1.jpg",
+      "gallery": [
+        "assets/uploads/20260921-archive-muas2ysk-2.jpg",
+        "assets/uploads/20260921-archive-muas2ysk-3.jpg"
+      ],
+      "price_krw": 350000,
+      "show_price": false,
+      "status": "archive",
+      "status_text": "USED",
+      "description": "93-95년 초판 레드 \n\n라지\n\n전기형리벳",
+      "published_at": null
+    },
+    {
       "id": "ARCHIVE-MUANM8N6",
       "category": "shoes",
       "category_locked": true,
