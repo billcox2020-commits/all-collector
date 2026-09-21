@@ -293,9 +293,17 @@ async function commitFiles(entries,message,headSha){
   return next.sha;
 }
 
-async function latestData(ref){
+async function latestData(ref=BRANCH){
   const [personalFile,activeFile,changesFile]=await Promise.all([getJsonFile(PATHS.personal,ref),getJsonFile(PATHS.active,ref),getJsonFile(PATHS.changes,ref)]);
   return {personal:Array.isArray(personalFile.data.items)?personalFile.data.items:[],active:Array.isArray(activeFile.data.items)?activeFile.data.items:[],changes:normalizeChanges(changesFile.data)};
+}
+
+function applyLoadedData(data){
+  rawPersonal=data.personal;
+  rawActive=data.active;
+  changes=normalizeChanges(data.changes);
+  rebuildRecords();
+  renderList();
 }
 
 function jsonEntry(path,value){return {path,content:`${JSON.stringify(value,null,2)}\n`,encoding:'utf-8'}}
@@ -318,27 +326,37 @@ async function saveRecord(event){
       entries.push({path:imagePath,content:bytesToBase64(bytes),encoding:'base64'});imagePaths.push(imagePath);
     }
     next.image=imagePaths[0]||'';next.gallery=imagePaths.slice(1);
-    if(selected?._origin==='active'){
-      const original=latest.active.find(item=>item.id===selected.id);
-      if(!original)throw new Error('원본 매물을 찾지 못했습니다. 새로고침 후 다시 시도해 주세요.');
-      const override={...next};
+    const activeIndex=selected?latest.active.findIndex(item=>item.id===selected.id):-1;
+    const personalIndex=selected?latest.personal.findIndex(item=>item.id===selected.id):-1;
+    const editingActive=Boolean(selected&&activeIndex>=0);
+    const editingPersonal=Boolean(selected&&personalIndex>=0);
+
+    if(editingActive){
+      const override=cleanRecord({...next});
       delete override.id;delete override.source;
       latest.changes.overrides[selected.id]=override;
       latest.changes.hidden_ids=latest.changes.hidden_ids.filter(id=>id!==selected.id);
       entries.push(jsonEntry(PATHS.changes,latest.changes));
     }else{
+      if(selected&&!editingPersonal)throw new Error('원본 기록을 찾지 못했습니다. 목록을 다시 불러온 뒤 다시 시도해 주세요.');
       const record=cleanRecord({...selected,...next});
-      const index=selected?latest.personal.findIndex(item=>item.id===selected.id):-1;
-      if(selected&&index<0)throw new Error('원본 기록을 찾지 못했습니다. 새로고침 후 다시 시도해 주세요.');
-      if(index>=0)latest.personal[index]=record;else latest.personal.unshift(record);
+      if(personalIndex>=0)latest.personal[personalIndex]=record;else latest.personal.unshift(record);
       latest.changes.hidden_ids=latest.changes.hidden_ids.filter(id=>id!==record.id);
       entries.push(jsonEntry(PATHS.personal,{items:latest.personal}));
       if(latest.changes.hidden_ids.length!==changes.hidden_ids.length)entries.push(jsonEntry(PATHS.changes,latest.changes));
     }
-    await commitFiles(entries,selected?`Update archive record: ${next.title}`:`Add archive record: ${next.title}`,ref.object.sha);
-    showToast('저장 완료. 공개 사이트는 잠시 후 갱신됩니다.');
-    await loadRecords();
-    const saved=records.find(item=>item.id===next.id);setBusy(false);openEditor(saved||null);
+
+    const commitSha=await commitFiles(entries,selected?`Update archive record: ${next.title}`:`Add archive record: ${next.title}`,ref.object.sha);
+    // main 브랜치를 즉시 다시 읽으면 GitHub API가 직전 상태를 잠깐 돌려주는 경우가 있다.
+    // 방금 만든 커밋 SHA를 직접 읽어 저장 결과를 검증하고 화면에도 그 값을 사용한다.
+    const verified=await latestData(commitSha);
+    if(editingActive&&!verified.changes.overrides[next.id])throw new Error('수정값 저장을 확인하지 못했습니다. 다시 저장해 주세요.');
+    if(!editingActive&&!verified.personal.some(item=>item.id===next.id))throw new Error('기록 저장을 확인하지 못했습니다. 다시 저장해 주세요.');
+    applyLoadedData(verified);
+    const saved=records.find(item=>item.id===next.id);
+    showToast('저장 완료. 수정 내용이 확인됐습니다.');
+    saveMessage.textContent='저장 완료';
+    setBusy(false);openEditor(saved||null);
   }catch(error){saveMessage.textContent=humanError(error)}finally{setBusy(false)}
 }
 
@@ -374,11 +392,8 @@ function showToast(message){
   toastTimer=setTimeout(()=>{toast.hidden=true},3600);
 }
 
-async function loadRecords(){
-  const [personalFile,activeFile,changesFile]=await Promise.all([getJsonFile(PATHS.personal),getJsonFile(PATHS.active),getJsonFile(PATHS.changes)]);
-  rawPersonal=Array.isArray(personalFile.data.items)?personalFile.data.items:[];
-  rawActive=Array.isArray(activeFile.data.items)?activeFile.data.items:[];
-  changes=normalizeChanges(changesFile.data);rebuildRecords();renderList();
+async function loadRecords(ref=BRANCH){
+  applyLoadedData(await latestData(ref));
 }
 
 async function connectWithToken(candidate){
