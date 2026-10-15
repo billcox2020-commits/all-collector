@@ -7,6 +7,8 @@ const PATHS={personal:'data/personal-posts.json',active:'data/bunjang-active.jso
 const API='https://api.github.com';
 const TOKEN_KEY='all-collector-admin-token';
 const VAULT_KEY='all-collector-admin-vault-v1';
+const VAULT_DB='all-collector-admin-auth';
+const VAULT_STORE='vaults';
 const encoder=new TextEncoder();
 const decoder=new TextDecoder();
 const categoryNames={shoes:'SHOES',outer:'OUTER',top:'TOP',bottom:'BOTTOM',etc:'ETC'};
@@ -52,10 +54,63 @@ let selected=null;
 let draftImages=[];
 let busy=false;
 let toastTimer=0;
+let vaultCache='';
 
 function randomBytes(length){const bytes=new Uint8Array(length);crypto.getRandomValues(bytes);return bytes}
 
 function base64ToBytes(value){return Uint8Array.from(atob(value),character=>character.charCodeAt(0))}
+
+function localVault(){try{return localStorage.getItem(VAULT_KEY)||''}catch{return ''}}
+
+function openVaultDb(){
+  return new Promise((resolve,reject)=>{
+    if(!('indexedDB' in window)){reject(new Error('영구 저장소를 사용할 수 없습니다.'));return}
+    const request=indexedDB.open(VAULT_DB,1);
+    request.onupgradeneeded=()=>{if(!request.result.objectStoreNames.contains(VAULT_STORE))request.result.createObjectStore(VAULT_STORE)};
+    request.onsuccess=()=>resolve(request.result);
+    request.onerror=()=>reject(request.error||new Error('영구 저장소를 열 수 없습니다.'));
+    request.onblocked=()=>reject(new Error('다른 관리자 창을 닫은 뒤 다시 시도해 주세요.'));
+  });
+}
+
+async function vaultTransaction(mode,operation){
+  const db=await openVaultDb();
+  try{return await new Promise((resolve,reject)=>{
+    const tx=db.transaction(VAULT_STORE,mode);let result;
+    tx.oncomplete=()=>resolve(result);
+    tx.onerror=tx.onabort=()=>reject(tx.error||new Error('로그인 저장을 완료하지 못했습니다.'));
+    const request=operation(tx.objectStore(VAULT_STORE));
+    request.onsuccess=()=>{result=request.result};
+  })}finally{db.close()}
+}
+
+async function readPersistentVault(){
+  const local=localVault();
+  if(local){
+    vaultCache=local;
+    try{await vaultTransaction('readwrite',store=>store.put(local,VAULT_KEY))}catch{}
+    return local;
+  }
+  try{
+    const saved=await vaultTransaction('readonly',store=>store.get(VAULT_KEY))||'';
+    if(saved){vaultCache=saved;try{localStorage.setItem(VAULT_KEY,saved)}catch{}}
+    return saved;
+  }catch{return ''}
+}
+
+async function writePersistentVault(serialized){
+  let localSaved=false,dbSaved=false;
+  try{localStorage.setItem(VAULT_KEY,serialized);localSaved=localStorage.getItem(VAULT_KEY)===serialized}catch{}
+  try{await vaultTransaction('readwrite',store=>store.put(serialized,VAULT_KEY));dbSaved=true}catch{}
+  if(!localSaved&&!dbSaved)throw new Error('이 창에서는 로그인 저장이 차단되어 있습니다. 일반 Safari 관리자 창에서 다시 시도해 주세요.');
+  vaultCache=serialized;
+  try{await navigator.storage?.persist?.()}catch{}
+}
+
+async function deletePersistentVault(){
+  vaultCache='';try{localStorage.removeItem(VAULT_KEY)}catch{}
+  try{await vaultTransaction('readwrite',store=>store.delete(VAULT_KEY))}catch{}
+}
 
 async function passwordKey(password,salt){
   const material=await crypto.subtle.importKey('raw',encoder.encode(password),'PBKDF2',false,['deriveKey']);
@@ -65,18 +120,18 @@ async function passwordKey(password,salt){
 async function saveTokenVault(password){
   const salt=randomBytes(16);const iv=randomBytes(12);const key=await passwordKey(password,salt);
   const encrypted=await crypto.subtle.encrypt({name:'AES-GCM',iv},key,encoder.encode(token));
-  localStorage.setItem(VAULT_KEY,JSON.stringify({version:1,salt:bytesToBase64(salt),iv:bytesToBase64(iv),cipher:bytesToBase64(new Uint8Array(encrypted))}));
+  await writePersistentVault(JSON.stringify({version:1,salt:bytesToBase64(salt),iv:bytesToBase64(iv),cipher:bytesToBase64(new Uint8Array(encrypted))}));
 }
 
 async function readTokenVault(password,savedVault=null){
-  const vault=savedVault||JSON.parse(localStorage.getItem(VAULT_KEY)||'null');
+  const vault=savedVault||JSON.parse((await readPersistentVault())||'null');
   if(!vault||vault.version!==1)throw new Error('저장된 로그인을 찾지 못했습니다.');
   const salt=base64ToBytes(vault.salt);const iv=base64ToBytes(vault.iv);const key=await passwordKey(password,salt);
   const decrypted=await crypto.subtle.decrypt({name:'AES-GCM',iv},key,base64ToBytes(vault.cipher));
   return decoder.decode(decrypted);
 }
 
-function hasTokenVault(){return Boolean(localStorage.getItem(VAULT_KEY))}
+function hasTokenVault(){return Boolean(vaultCache||localVault())}
 
 function showLoginMode(useToken=false){
   const usePassword=hasTokenVault()&&!useToken;
@@ -441,8 +496,8 @@ async function storePassword(event){
   finally{button.disabled=false;button.textContent='비밀번호 저장'}
 }
 
-function removeSavedLogin(){
-  localStorage.removeItem(VAULT_KEY);passwordDialog.close();passwordButton.textContent='비밀번호 설정';showToast('이 기기의 저장된 로그인을 삭제했습니다.');
+async function removeSavedLogin(){
+  await deletePersistentVault();passwordDialog.close();passwordButton.textContent='비밀번호 설정';showToast('이 기기의 저장된 로그인을 삭제했습니다.');
 }
 
 function disconnect(){
@@ -479,7 +534,7 @@ $('#imageUrlInput').addEventListener('change',event=>{
 
 
 function downloadLoginBackup(){
-  const saved=localStorage.getItem(VAULT_KEY);
+  const saved=vaultCache||localVault();
   if(!saved){showToast('먼저 비밀번호를 저장해 주세요.');return}
   const url=URL.createObjectURL(new Blob([saved],{type:'application/json'}));
   const link=document.createElement('a');link.href=url;link.download='archive-login.json';link.click();
@@ -511,12 +566,16 @@ restoreInput.addEventListener('change',async()=>{
     const password=prompt('이 로그인 파일을 저장할 때 설정한 관리자 비밀번호를 입력하세요.');
     if(password===null)return;
     const candidate=await readTokenVault(password,vault);
-    localStorage.setItem(VAULT_KEY,JSON.stringify(vault));
+    await writePersistentVault(JSON.stringify(vault));
     if(!hasTokenVault())throw new Error('이 창에서 로그인 저장을 허용하지 않습니다.');
     showLoginMode();
     await connectWithToken(candidate);
   }catch(error){loginError.textContent=error?.name==='OperationError'?'비밀번호가 맞지 않습니다.':String(error.message||error)}
   finally{restoreInput.value=''}
 });
-showLoginMode();
-if(sessionStorage.getItem(TOKEN_KEY))connect();
+async function initializeAdmin(){
+  await readPersistentVault();
+  showLoginMode();
+  if(sessionStorage.getItem(TOKEN_KEY))connect();
+}
+initializeAdmin();
