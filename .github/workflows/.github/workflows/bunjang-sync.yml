@@ -1,0 +1,69 @@
+name: Sync new Bunjang listings
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: all-collector-pages
+  cancel-in-progress: false
+
+jobs:
+  sync-and-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out archive
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Fetch Bunjang seller listings from Apify Task
+        env:
+          APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
+          APIFY_TASK_ID: ${{ secrets.APIFY_TASK_ID }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$APIFY_TOKEN" || -z "$APIFY_TASK_ID" ]]; then
+            echo '::error::Set APIFY_TOKEN and APIFY_TASK_ID in repository Actions secrets.'
+            exit 1
+          fi
+          curl --fail-with-body --silent --show-error --retry 2 \
+            --max-time 330 \
+            -X POST \
+            -H 'Content-Type: application/json' \
+            -H "Authorization: Bearer ${APIFY_TOKEN}" \
+            --data '{}' \
+            "https://api.apify.com/v2/actor-tasks/${APIFY_TASK_ID}/run-sync-get-dataset-items?format=json&clean=true&limit=1000" \
+            --output bunjang-actor-items.json
+
+      - name: Add unseen active products only
+        run: python scripts/sync_bunjang.py
+
+      - name: Save archive changes
+        id: commit
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- data/bunjang-active.json; then
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
+          else
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add data/bunjang-active.json
+            git commit -m 'Sync new Bunjang listings'
+            git push
+            echo 'changed=true' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Summarize result
+        if: always()
+        run: |
+          if [[ "${{ steps.commit.outputs.changed }}" == 'true' ]]; then
+            echo 'New Bunjang items were added and committed to main.' >> "$GITHUB_STEP_SUMMARY"
+          elif [[ "${{ steps.commit.outputs.changed }}" == 'false' ]]; then
+            echo 'No new active Bunjang item IDs were found; the existing archive was left unchanged.' >> "$GITHUB_STEP_SUMMARY"
+          fi
