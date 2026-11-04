@@ -2,8 +2,24 @@
   "generated_at": "2026-11-04",
   "source": "Bunjang / 올콜렉터 shop 4934829",
   "rule": "Existing archive preserved. Apify seller export filtered to sellerId 4934829, status 판매중, updated after 2026-09-20, and deduplicated by product ID.",
-  "count": 442,
+  "count": 443,
   "items": [
+    {
+      "id": "BJ-445679758",
+      "category": "shoes",
+      "brand": "NIKE",
+      "source": "bunjang",
+      "title": "96년 나이키 에어포스 1 로우 간장",
+      "source_url": "https://m.bunjang.co.kr/products/445679758",
+      "image": "https://media.bunjang.co.kr/product/445679758_1_1793764350_w360.jpg",
+      "price_krw": 135000,
+      "status": "for_sale",
+      "status_text": "판매 중",
+      "checked_at": "2026-11-04",
+      "description": "번개장터 올콜렉터 상점에서 자동 수집.",
+      "size": "",
+      "year": 1996
+    },
     {
       "id": "BJ-399659212",
       "category": "shoes",
