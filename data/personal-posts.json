@@ -1,6 +1,25 @@
 {
   "items": [
     {
+      "id": "ARCHIVE-MW20PUZ2",
+      "category": "outer",
+      "category_locked": true,
+      "brand": "디스퀘어드",
+      "source": "personal",
+      "title": "기무라",
+      "year": 2004,
+      "size": "50",
+      "image": "assets/uploads/20261104-archive-mw20puz2-1.jpg",
+      "gallery": [
+        "assets/uploads/20261104-archive-mw20puz2-2.jpg"
+      ],
+      "price_krw": null,
+      "show_price": false,
+      "status": "archive",
+      "status_text": "Used",
+      "published_at": null
+    },
+    {
       "id": "ARCHIVE-MUAS2YSK",
       "category": "etc",
       "category_locked": true,
