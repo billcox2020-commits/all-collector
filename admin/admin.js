@@ -571,3 +571,25 @@ async function initializeAdmin(){
   if(sessionStorage.getItem(TOKEN_KEY))connect();
 }
 initializeAdmin();
+
+/* ALL_COLLECTOR_ADMIN_NEWEST_FIRST_V2 */
+function newestAdminRecordTimeV2(item){
+  const direct=Date.parse(item?.added_at||item?.created_at||item?.updated_at||'');
+  if(Number.isFinite(direct))return direct;
+  const match=String(item?.id||'').match(/^ARCHIVE-([0-9A-Z]+)$/i);
+  if(match){const value=parseInt(match[1],36);if(Number.isFinite(value))return value}
+  const fallback=Date.parse(item?.checked_at||item?.published_at||'');
+  return Number.isFinite(fallback)?fallback:0;
+}
+const newestOriginalRebuildRecordsV2=rebuildRecords;
+rebuildRecords=function(){
+  newestOriginalRebuildRecordsV2();
+  records.sort((a,b)=>newestAdminRecordTimeV2(b)-newestAdminRecordTimeV2(a));
+};
+const newestOriginalFormRecordV2=formRecord;
+formRecord=function(){
+  const item=newestOriginalFormRecordV2();
+  item.added_at=selected?.added_at||new Date().toISOString();
+  return item;
+};
+

@@ -50,3 +50,24 @@ function render(){const selected=filteredItems();let shown=selected;if(category=
 document.querySelectorAll('[data-category]').forEach(button=>button.addEventListener('click',()=>{category=button.dataset.category;expanded=false;document.querySelectorAll('[data-category]').forEach(b=>b.setAttribute('aria-pressed',String(b===button)));render()}));
 more.addEventListener('click',()=>{expanded=true;render()});document.getElementById('priceMode').addEventListener('change',event=>{priceMode=event.target.value;render()});dialog.querySelector('.close').addEventListener('click',()=>dialog.close());dialog.addEventListener('click',event=>{if(event.target===dialog){const r=dialog.getBoundingClientRect();if(event.clientX<r.left||event.clientX>r.right||event.clientY<r.top||event.clientY>r.bottom)dialog.close()}});
 (async()=>{try{const responses=await Promise.all([fetch('data/site.json',{cache:'no-store'}),fetch('data/personal-posts.json',{cache:'no-store'}),fetch('data/bunjang-active.json',{cache:'no-store'}),fetch('data/admin-overrides.json',{cache:'no-store'})]);if(responses.some(r=>!r.ok))throw Error('Fetch failed');const [config,personal,active,changes]=await Promise.all(responses.map(r=>r.json()));site=config;applySiteSettings();const personalBase=Array.isArray(personal.items)?personal.items:[];const activeBase=Array.isArray(active.items)?active.items.filter(item=>item.status==='for_sale'):[];const personalItems=applyAdminChanges(personalBase,changes).map(item=>({...item,brand:canonicalBrand(item.brand),category:categoryForItem(item)}));const activeItems=applyAdminChanges(activeBase,changes).map(item=>({...item,brand:canonicalBrand(item.brand),category:categoryForItem(item)}));items=[...personalItems,...activeItems];document.title=site.site_title||'ALL COLLECTOR ARCHIVE';priceMode=['hidden','sale','all'].includes(site.price_mode_default)?site.price_mode_default:'hidden';document.getElementById('priceMode').value=priceMode;renderCategoryCounts();renderBrandFilters();render()}catch{grid.innerHTML='<p class="empty">기록을 불러오지 못했습니다. 잠시 후 새로고침해 주세요. 아래 원문 링크에서도 확인할 수 있습니다.</p>'}})();
+
+/* ALL_COLLECTOR_NEWEST_FIRST_V2 */
+function newestRecordTimeV2(item){
+  const direct=Date.parse(item?.added_at||item?.created_at||item?.updated_at||'');
+  if(Number.isFinite(direct))return direct;
+  const match=String(item?.id||'').match(/^ARCHIVE-([0-9A-Z]+)$/i);
+  if(match){const value=parseInt(match[1],36);if(Number.isFinite(value))return value}
+  const fallback=Date.parse(item?.checked_at||item?.published_at||'');
+  return Number.isFinite(fallback)?fallback:0;
+}
+const newestOriginalApplySiteSettingsV2=applySiteSettings;
+applySiteSettings=function(){
+  site.featured_ids=[];
+  return newestOriginalApplySiteSettingsV2();
+};
+filteredItems=function(){
+  return items
+    .filter(item=>(category==='all'||item.category===category)&&(brand==='all'||item.brand===brand))
+    .sort((a,b)=>newestRecordTimeV2(b)-newestRecordTimeV2(a));
+};
+

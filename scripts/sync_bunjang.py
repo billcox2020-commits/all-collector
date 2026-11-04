@@ -204,6 +204,7 @@ def main() -> int:
         if pid in known:
             continue
         candidate = normalize(item, pid)
+        candidate["added_at"] = datetime.now(timezone.utc).isoformat()
         if normalized_url(candidate.get("source_url")) in personal_urls:
             skipped_personal += 1
             continue
