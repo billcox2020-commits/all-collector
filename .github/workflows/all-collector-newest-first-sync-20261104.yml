@@ -1,0 +1,160 @@
+name: Finalize newest-first and sync Bunjang
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: all-collector-finalize-newest-first
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out current main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Make new records appear first
+        shell: python
+        run: |
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              file = Path(path)
+              text = file.read_text(encoding="utf-8")
+              if new in text:
+                  return
+              if old not in text:
+                  raise SystemExit(f"Expected code was not found in {path}; stopped without committing.")
+              file.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+          sync = Path("scripts/sync_bunjang.py")
+          sync_text = sync.read_text(encoding="utf-8")
+          if '"added_at": datetime.now(timezone.utc).isoformat()' not in sync_text:
+              replace_once(
+                  sync,
+                  '        "checked_at": datetime.now(timezone.utc).date().isoformat(),\n',
+                  '        "checked_at": datetime.now(timezone.utc).date().isoformat(),\n'
+                  '        "added_at": datetime.now(timezone.utc).isoformat(),\n',
+              )
+
+          admin = Path("admin/admin.js")
+          admin_text = admin.read_text(encoding="utf-8")
+          helper = """function recordTime(item){
+            const direct=Date.parse(item?.added_at||item?.created_at||item?.updated_at||'');
+            if(Number.isFinite(direct))return direct;
+            const match=String(item?.id||'').match(/^ARCHIVE-([0-9A-Z]+)$/i);
+            if(match){const value=parseInt(match[1],36);if(Number.isFinite(value))return value}
+            const fallback=Date.parse(item?.checked_at||item?.published_at||'');
+            return Number.isFinite(fallback)?fallback:0;
+          }
+
+          """
+          if "function recordTime(item)" not in admin_text:
+              marker = "function rebuildRecords(){"
+              if marker not in admin_text:
+                  raise SystemExit("Admin record builder was not found; stopped without committing.")
+              admin_text = admin_text.replace(marker, helper + marker, 1)
+          old_end = "  }).filter(item=>!hidden.has(item.id)).map(item=>{\n    const override=changes.overrides[item.id];\n    return override?{...item,...override,id:item.id,source:item.source,_origin:item._origin}:item;\n  });"
+          new_end = "  }).filter(item=>!hidden.has(item.id)).map(item=>{\n    const override=changes.overrides[item.id];\n    return override?{...item,...override,id:item.id,source:item.source,_origin:item._origin}:item;\n  }).sort((a,b)=>recordTime(b)-recordTime(a));"
+          if new_end not in admin_text:
+              if old_end not in admin_text:
+                  raise SystemExit("Admin ordering code was not found; stopped without committing.")
+              admin_text = admin_text.replace(old_end, new_end, 1)
+          if "added_at:selected?.added_at||new Date().toISOString()," not in admin_text:
+              old = "    source_url:$('#sourceUrlInput').value.trim()\n"
+              new = "    source_url:$('#sourceUrlInput').value.trim(),\n    added_at:selected?.added_at||new Date().toISOString()\n"
+              if old not in admin_text:
+                  raise SystemExit("Admin form output was not found; stopped without committing.")
+              admin_text = admin_text.replace(old, new, 1)
+          admin.write_text(admin_text, encoding="utf-8")
+
+          site = Path("assets/site.js")
+          site_text = site.read_text(encoding="utf-8")
+          site_helper = """const recordTime=item=>{
+            const direct=Date.parse(item?.added_at||item?.created_at||item?.updated_at||'');
+            if(Number.isFinite(direct))return direct;
+            const match=String(item?.id||'').match(/^ARCHIVE-([0-9A-Z]+)$/i);
+            if(match){const value=parseInt(match[1],36);if(Number.isFinite(value))return value}
+            const fallback=Date.parse(item?.checked_at||item?.published_at||'');
+            return Number.isFinite(fallback)?fallback:0;
+          };
+          """
+          if "const recordTime=item=>" not in site_text:
+              marker = "let items=[],site={},category='all',brand='all',expanded=false,priceMode='hidden';"
+              if marker not in site_text:
+                  raise SystemExit("Guest data state was not found; stopped without committing.")
+              site_text = site_text.replace(marker, site_helper + marker, 1)
+          old_render = "function render(){const selected=filteredItems();let shown=selected;if(category==='all'&&brand==='all'&&!expanded){const ordered=(site.featured_ids||[]).map(id=>items.find(item=>item.id===id)).filter(Boolean);const featured=new Set(ordered.map(item=>item.id));shown=[...ordered,...selected.filter(item=>!featured.has(item.id))].slice(0,8)}"
+          new_render = "function render(){const selected=filteredItems();let shown=selected;if(category==='all'&&brand==='all'&&!expanded)shown=selected.slice(0,8)"
+          if new_render not in site_text:
+              if old_render not in site_text:
+                  raise SystemExit("Guest featured ordering code was not found; stopped without committing.")
+              site_text = site_text.replace(old_render, new_render, 1)
+          old_items = "items=[...personalItems,...activeItems];"
+          new_items = "items=[...personalItems,...activeItems].sort((a,b)=>recordTime(b)-recordTime(a));"
+          if new_items not in site_text:
+              if old_items not in site_text:
+                  raise SystemExit("Guest item merge was not found; stopped without committing.")
+              site_text = site_text.replace(old_items, new_items, 1)
+          site.write_text(site_text, encoding="utf-8")
+
+      - name: Fetch current Bunjang seller listings
+        env:
+          APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$APIFY_TOKEN" || { echo "::error::APIFY_TOKEN is missing."; exit 1; }
+          curl --fail-with-body --silent --show-error --retry 2 --max-time 330 \
+            -X POST -H 'Content-Type: application/json' \
+            --data '{"seller":"4934829","maxResults":1000,"sortBy":"date","skipAds":true,"delayBetweenPages":1}' \
+            "https://api.apify.com/v2/acts/16Y8KDUNZ5NXdSOLX/run-sync-get-dataset-items?token=${APIFY_TOKEN}&format=json&clean=true&limit=1000" \
+            --output bunjang-actor-items.json
+
+      - name: Add unseen active Bunjang products
+        run: python scripts/sync_bunjang.py
+
+      - name: Verify preserved data and syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          active=json.load(open('data/bunjang-active.json',encoding='utf-8'))['items']
+          personal=json.load(open('data/personal-posts.json',encoding='utf-8'))['items']
+          assert len(active) >= 443, f'Bunjang archive shrank: {len(active)}'
+          assert len(personal) >= 8, f'Personal archive shrank: {len(personal)}'
+          assert any('armani' in str(x.get('title','')).lower() and 'hat' in str(x.get('title','')).lower() for x in personal), 'Armani hat is missing'
+          assert any(len(x.get('gallery') or []) >= 1 for x in personal), 'Newest multi-photo personal record is missing'
+          print(f'Preserved {len(active)} Bunjang + {len(personal)} personal records')
+          PY
+          node --check assets/site.js
+          node --check admin/admin.js
+
+      - name: Commit verified changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add scripts/sync_bunjang.py assets/site.js admin/admin.js data/bunjang-active.json
+          if git diff --cached --quiet; then
+            echo "Nothing changed."
+            exit 0
+          fi
+          unexpected="$(git diff --cached --name-only | grep -Ev '^(scripts/sync_bunjang.py|assets/site.js|admin/admin.js|data/bunjang-active.json)$' || true)"
+          test -z "$unexpected" || { echo "::error::Unexpected files: $unexpected"; exit 1; }
+          git commit -m "Show newest archive records first"
+          git push origin HEAD:main
