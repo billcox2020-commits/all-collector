@@ -5,9 +5,10 @@ const REPO='all-collector';
 const BRANCH='main';
 const PATHS={personal:'data/personal-posts.json',active:'data/bunjang-active.json',changes:'data/admin-overrides.json'};
 const API='https://api.github.com';
-const TOKEN_KEY='all-collector-admin-token';
-const VAULT_KEY='all-collector-admin-vault-v1';
-const VAULT_DB='all-collector-admin-auth';
+const TOKEN_KEY='all-collector-rebuild-v1@billcox2020-commits/all-collector:token';
+const VAULT_KEY='all-collector-rebuild-v1@billcox2020-commits/all-collector:vault';
+const LEGACY_VAULT_KEY='all-collector-admin-vault-v1';
+const VAULT_DB='all-collector-rebuild-v1@billcox2020-commits/all-collector:auth';
 const VAULT_STORE='vaults';
 const encoder=new TextEncoder();
 const decoder=new TextDecoder();
@@ -60,7 +61,7 @@ function randomBytes(length){const bytes=new Uint8Array(length);crypto.getRandom
 
 function base64ToBytes(value){return Uint8Array.from(atob(value),character=>character.charCodeAt(0))}
 
-function localVault(){try{return localStorage.getItem(VAULT_KEY)||''}catch{return ''}}
+function localVault(){try{return localStorage.getItem(VAULT_KEY)||localStorage.getItem(LEGACY_VAULT_KEY)||''}catch{return ''}}
 
 function openVaultDb(){
   return new Promise((resolve,reject)=>{
@@ -69,47 +70,42 @@ function openVaultDb(){
     request.onupgradeneeded=()=>{if(!request.result.objectStoreNames.contains(VAULT_STORE))request.result.createObjectStore(VAULT_STORE)};
     request.onsuccess=()=>resolve(request.result);
     request.onerror=()=>reject(request.error||new Error('영구 저장소를 열 수 없습니다.'));
-    request.onblocked=()=>reject(new Error('다른 관리자 창을 닫은 뒤 다시 시도해 주세요.'));
   });
-}
-
-async function vaultTransaction(mode,operation){
-  const db=await openVaultDb();
-  try{return await new Promise((resolve,reject)=>{
-    const tx=db.transaction(VAULT_STORE,mode);let result;
-    tx.oncomplete=()=>resolve(result);
-    tx.onerror=tx.onabort=()=>reject(tx.error||new Error('로그인 저장을 완료하지 못했습니다.'));
-    const request=operation(tx.objectStore(VAULT_STORE));
-    request.onsuccess=()=>{result=request.result};
-  })}finally{db.close()}
 }
 
 async function readPersistentVault(){
   const local=localVault();
   if(local){
     vaultCache=local;
-    try{await vaultTransaction('readwrite',store=>store.put(local,VAULT_KEY))}catch{}
+    try{
+      const db=await openVaultDb();
+      await new Promise((resolve,reject)=>{const request=db.transaction(VAULT_STORE,'readwrite').objectStore(VAULT_STORE).put(local,VAULT_KEY);request.onsuccess=()=>resolve();request.onerror=()=>reject(request.error)});
+      db.close();
+      try{await navigator.storage?.persist?.()}catch{}
+    }catch{}
     return local;
   }
   try{
-    const saved=await vaultTransaction('readonly',store=>store.get(VAULT_KEY))||'';
+    const db=await openVaultDb();
+    const saved=await new Promise((resolve,reject)=>{const request=db.transaction(VAULT_STORE,'readonly').objectStore(VAULT_STORE).get(VAULT_KEY);request.onsuccess=()=>resolve(request.result||'');request.onerror=()=>reject(request.error)});
+    db.close();
     if(saved){vaultCache=saved;try{localStorage.setItem(VAULT_KEY,saved)}catch{}}
     return saved;
   }catch{return ''}
 }
 
 async function writePersistentVault(serialized){
-  let localSaved=false,dbSaved=false;
-  try{localStorage.setItem(VAULT_KEY,serialized);localSaved=localStorage.getItem(VAULT_KEY)===serialized}catch{}
-  try{await vaultTransaction('readwrite',store=>store.put(serialized,VAULT_KEY));dbSaved=true}catch{}
-  if(!localSaved&&!dbSaved)throw new Error('이 창에서는 로그인 저장이 차단되어 있습니다. 일반 Safari 관리자 창에서 다시 시도해 주세요.');
   vaultCache=serialized;
+  try{localStorage.setItem(VAULT_KEY,serialized)}catch{}
+  const db=await openVaultDb();
+  await new Promise((resolve,reject)=>{const request=db.transaction(VAULT_STORE,'readwrite').objectStore(VAULT_STORE).put(serialized,VAULT_KEY);request.onsuccess=()=>resolve();request.onerror=()=>reject(request.error)});
+  db.close();
   try{await navigator.storage?.persist?.()}catch{}
 }
 
 async function deletePersistentVault(){
   vaultCache='';try{localStorage.removeItem(VAULT_KEY)}catch{}
-  try{await vaultTransaction('readwrite',store=>store.delete(VAULT_KEY))}catch{}
+  try{const db=await openVaultDb();await new Promise((resolve,reject)=>{const request=db.transaction(VAULT_STORE,'readwrite').objectStore(VAULT_STORE).delete(VAULT_KEY);request.onsuccess=()=>resolve();request.onerror=()=>reject(request.error)});db.close()}catch{}
 }
 
 async function passwordKey(password,salt){
@@ -348,17 +344,13 @@ async function commitFiles(entries,message,headSha){
   return next.sha;
 }
 
-async function latestData(ref=BRANCH){
+async function latestData(ref){
   const [personalFile,activeFile,changesFile]=await Promise.all([getJsonFile(PATHS.personal,ref),getJsonFile(PATHS.active,ref),getJsonFile(PATHS.changes,ref)]);
-  return {personal:Array.isArray(personalFile.data.items)?personalFile.data.items:[],active:Array.isArray(activeFile.data.items)?activeFile.data.items:[],changes:normalizeChanges(changesFile.data)};
-}
-
-function applyLoadedData(data){
-  rawPersonal=data.personal;
-  rawActive=data.active;
-  changes=normalizeChanges(data.changes);
-  rebuildRecords();
-  renderList();
+  const personalDocument=personalFile.data&&typeof personalFile.data==='object'?personalFile.data:{items:[]};
+  const activeDocument=activeFile.data&&typeof activeFile.data==='object'?activeFile.data:{items:[]};
+  const personal=Array.isArray(personalDocument.items)?personalDocument.items:[];
+  const active=Array.isArray(activeDocument.items)?activeDocument.items:[];
+  return {personalDocument,activeDocument,personal,active,changes:normalizeChanges(changesFile.data)};
 }
 
 function jsonEntry(path,value){return {path,content:`${JSON.stringify(value,null,2)}\n`,encoding:'utf-8'}}
@@ -381,37 +373,34 @@ async function saveRecord(event){
       entries.push({path:imagePath,content:bytesToBase64(bytes),encoding:'base64'});imagePaths.push(imagePath);
     }
     next.image=imagePaths[0]||'';next.gallery=imagePaths.slice(1);
-    const activeIndex=selected?latest.active.findIndex(item=>item.id===selected.id):-1;
-    const personalIndex=selected?latest.personal.findIndex(item=>item.id===selected.id):-1;
-    const editingActive=Boolean(selected&&activeIndex>=0);
-    const editingPersonal=Boolean(selected&&personalIndex>=0);
-
+    const activeIndex=selected?latest.active.findIndex(item=>String(item.id)===String(selected.id)):-1;
+    const personalIndex=selected?latest.personal.findIndex(item=>String(item.id)===String(selected.id)):-1;
+    const editingActive=Boolean(selected)&&(selected._origin==='active'||(activeIndex>=0&&personalIndex<0));
     if(editingActive){
-      const override=cleanRecord({...next});
+      if(activeIndex<0)throw new Error('원본 매물을 찾지 못했습니다. 목록을 다시 불러온 뒤 재시도해 주세요.');
+      const original=latest.active[activeIndex];
+      const updated=cleanRecord({...original,...next,id:original.id,source:original.source||'bunjang'});
+      latest.active[activeIndex]=updated;
+      const override={...next};
       delete override.id;delete override.source;
       latest.changes.overrides[selected.id]=override;
       latest.changes.hidden_ids=latest.changes.hidden_ids.filter(id=>id!==selected.id);
-      entries.push(jsonEntry(PATHS.changes,latest.changes));
+      const activeDocument={...latest.activeDocument,items:latest.active,count:latest.active.length};
+      entries.push(jsonEntry(PATHS.active,activeDocument),jsonEntry(PATHS.changes,latest.changes));
     }else{
-      if(selected&&!editingPersonal)throw new Error('원본 기록을 찾지 못했습니다. 목록을 다시 불러온 뒤 다시 시도해 주세요.');
       const record=cleanRecord({...selected,...next});
+      if(selected&&personalIndex<0)throw new Error('원본 기록을 찾지 못했습니다. 목록을 다시 불러온 뒤 재시도해 주세요.');
       if(personalIndex>=0)latest.personal[personalIndex]=record;else latest.personal.unshift(record);
       latest.changes.hidden_ids=latest.changes.hidden_ids.filter(id=>id!==record.id);
-      entries.push(jsonEntry(PATHS.personal,{items:latest.personal}));
+      const personalDocument={...latest.personalDocument,items:latest.personal};
+      if(Object.prototype.hasOwnProperty.call(personalDocument,'count'))personalDocument.count=latest.personal.length;
+      entries.push(jsonEntry(PATHS.personal,personalDocument));
       if(latest.changes.hidden_ids.length!==changes.hidden_ids.length)entries.push(jsonEntry(PATHS.changes,latest.changes));
     }
-
-    const commitSha=await commitFiles(entries,selected?`Update archive record: ${next.title}`:`Add archive record: ${next.title}`,ref.object.sha);
-    // main 브랜치를 즉시 다시 읽으면 GitHub API가 직전 상태를 잠깐 돌려주는 경우가 있다.
-    // 방금 만든 커밋 SHA를 직접 읽어 저장 결과를 검증하고 화면에도 그 값을 사용한다.
-    const verified=await latestData(commitSha);
-    if(editingActive&&!verified.changes.overrides[next.id])throw new Error('수정값 저장을 확인하지 못했습니다. 다시 저장해 주세요.');
-    if(!editingActive&&!verified.personal.some(item=>item.id===next.id))throw new Error('기록 저장을 확인하지 못했습니다. 다시 저장해 주세요.');
-    applyLoadedData(verified);
-    const saved=records.find(item=>item.id===next.id);
-    showToast('저장 완료. 수정 내용이 확인됐습니다.');
-    saveMessage.textContent='저장 완료';
-    setBusy(false);openEditor(saved||null);
+    await commitFiles(entries,selected?`Update archive record: ${next.title}`:`Add archive record: ${next.title}`,ref.object.sha);
+    showToast('저장 완료. 공개 사이트는 잠시 후 갱신됩니다.');
+    await loadRecords();
+    const saved=records.find(item=>item.id===next.id);setBusy(false);openEditor(saved||null);
   }catch(error){saveMessage.textContent=humanError(error)}finally{setBusy(false)}
 }
 
@@ -447,8 +436,11 @@ function showToast(message){
   toastTimer=setTimeout(()=>{toast.hidden=true},3600);
 }
 
-async function loadRecords(ref=BRANCH){
-  applyLoadedData(await latestData(ref));
+async function loadRecords(){
+  const [personalFile,activeFile,changesFile]=await Promise.all([getJsonFile(PATHS.personal),getJsonFile(PATHS.active),getJsonFile(PATHS.changes)]);
+  rawPersonal=Array.isArray(personalFile.data.items)?personalFile.data.items:[];
+  rawActive=Array.isArray(activeFile.data.items)?activeFile.data.items:[];
+  changes=normalizeChanges(changesFile.data);rebuildRecords();renderList();
 }
 
 async function connectWithToken(candidate){
@@ -574,7 +566,7 @@ restoreInput.addEventListener('change',async()=>{
   finally{restoreInput.value=''}
 });
 async function initializeAdmin(){
-  await readPersistentVault();
+  vaultCache=await readPersistentVault();
   showLoginMode();
   if(sessionStorage.getItem(TOKEN_KEY))connect();
 }

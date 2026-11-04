@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="ko"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://api.github.com; img-src 'self' data: blob: https:; style-src 'self'; script-src 'self'; base-uri 'none'; form-action 'none'">
+<title>SITE / MENU ADMIN · ALL COLLECTOR</title><link rel="stylesheet" href="admin.css"><script src="settings.js" defer></script>
+</head><body>
+<header class="topbar"><a class="wordmark" href="../">ALL COLLECTOR <span>SITE / MENU ADMIN</span></a><div class="top-actions"><span id="connectionState" class="connection">연결 안 됨</span><a class="text-button" href="./">COLLECTION</a><a class="text-button" href="cover.html">COVER</a><a class="text-button" href="information.html">INFORMATION</a><a class="text-button" href="../" target="_blank" rel="noopener">사이트 보기 ↗</a></div></header>
+<main>
+<section id="loginPanel" class="login-panel"><p class="kicker">PRIVATE EDITOR</p><h1>SITE / MENU 관리</h1><p>홈페이지 소개 문구와 외부 메뉴 링크를 수정합니다. 상품과 INFORMATION 데이터는 건드리지 않습니다.</p>
+<div id="passwordLogin" hidden><label class="token-field">관리자 비밀번호<input id="unlockPassword" type="password" autocomplete="current-password" placeholder="기존 관리자 비밀번호"></label><button id="unlockButton" class="primary wide" type="button">비밀번호로 열기</button><button id="useTokenButton" class="text-button login-switch" type="button">토큰으로 연결</button></div>
+<div id="tokenLogin"><label class="token-field">GitHub fine-grained token<input id="tokenInput" type="password" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="github_pat_…"></label><button id="connectButton" class="primary wide" type="button">관리 화면 연결</button></div><p id="loginError" class="error" role="alert"></p></section>
+<section id="workspace" class="login-panel" hidden><p class="kicker">SITE SETTINGS</p><h1>사이트 문구와 메뉴</h1>
+<form id="settingsForm"><div class="form-fields">
+<label class="full">사이트 제목<input id="siteTitle" maxlength="120"></label><label>상단 이름<input id="brandLine" maxlength="80"></label><label>상단 설명<input id="brandSubtitle" maxlength="160"></label>
+<label class="full">소개 제목<textarea id="introTitle" rows="3" maxlength="300" placeholder="줄바꿈 가능"></textarea></label><label class="full">소개 첫 문단<textarea id="introLead" rows="3" maxlength="600"></textarea></label><label class="full">소개 본문<textarea id="introDescription" rows="5" maxlength="2000"></textarea></label>
+<label class="full">링크 구역 제목<input id="linksTitle" maxlength="160"></label>
+<label>BLOG 표시 이름<input id="blogLabel" maxlength="80"></label><label>BLOG 주소<input id="blogUrl" type="url" inputmode="url"></label><label class="full">BLOG 설명<input id="blogDescription" maxlength="200"></label>
+<label>INSTAGRAM 표시 이름<input id="instagramLabel" maxlength="80"></label><label>INSTAGRAM 주소<input id="instagramUrl" type="url" inputmode="url"></label><label>INSTAGRAM 계정 표시<input id="instagramHandle" maxlength="80" placeholder="@bnr34_korea"></label><label>INSTAGRAM 설명<input id="instagramDescription" maxlength="200"></label>
+<label>FRUITSFAMILY 표시 이름<input id="fruitsLabel" maxlength="80"></label><label>FRUITSFAMILY 주소<input id="fruitsUrl" type="url" inputmode="url"></label><label class="full">FRUITSFAMILY 설명<input id="fruitsDescription" maxlength="200"></label>
+<label>자료 링크 표시 이름<input id="readingLabel" maxlength="100"></label><label>자료 링크 주소<input id="readingUrl" type="url" inputmode="url"></label><label class="full">자료 링크 설명<input id="readingDescription" maxlength="200"></label>
+<label>기본 가격 표시<select id="priceMode"><option value="hidden">비표시</option><option value="sale">판매 중만</option><option value="all">항상</option></select></label>
+</div><div class="savebar"><p id="saveMessage" role="status"></p><button id="saveButton" class="primary" type="submit">저장하고 사이트에 반영</button></div></form></section>
+</main><div id="toast" class="toast" role="status" aria-live="polite" hidden></div></body></html>
