@@ -1,69 +1,78 @@
-name: Sync new Bunjang listings
-
+name: Collect and publish ALL COLLECTOR
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
-
+    inputs:
+      collect:
+        description: Collect new Bunjang items before publishing
+        type: boolean
+        default: true
 permissions:
-  contents: write
-
+  contents: read
 concurrency:
   group: all-collector-pages
   cancel-in-progress: false
-
 jobs:
-  sync-and-publish:
+  collect:
+    if: github.event_name == 'workflow_dispatch' && inputs.collect
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
     steps:
-      - name: Check out archive
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-
-      - name: Fetch Bunjang seller listings from Apify Task
+      - name: Fetch one fresh Apify run
         env:
           APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
           APIFY_TASK_ID: ${{ secrets.APIFY_TASK_ID }}
-        run: |
-          set -euo pipefail
-          if [[ -z "$APIFY_TOKEN" || -z "$APIFY_TASK_ID" ]]; then
-            echo '::error::Set APIFY_TOKEN and APIFY_TASK_ID in repository Actions secrets.'
-            exit 1
-          fi
-          curl --fail-with-body --silent --show-error --retry 2 \
-            --max-time 330 \
-            -X POST \
-            -H 'Content-Type: application/json' \
-            -H "Authorization: Bearer ${APIFY_TOKEN}" \
-            --data '{}' \
-            "https://api.apify.com/v2/actor-tasks/${APIFY_TASK_ID}/run-sync-get-dataset-items?format=json&clean=true&limit=1000" \
-            --output bunjang-actor-items.json
-
-      - name: Add unseen active products only
+        run: python scripts/fetch_bunjang.py
+      - name: Add unseen products without replacing existing records
         run: python scripts/sync_bunjang.py
-
-      - name: Save archive changes
-        id: commit
+      - name: Commit only the collected archive
+        shell: bash
         run: |
           set -euo pipefail
           if git diff --quiet -- data/bunjang-active.json; then
-            echo 'changed=false' >> "$GITHUB_OUTPUT"
-          else
-            git config user.name 'github-actions[bot]'
-            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-            git add data/bunjang-active.json
-            git commit -m 'Sync new Bunjang listings'
-            git push
-            echo 'changed=true' >> "$GITHUB_OUTPUT"
+            echo 'No additions; existing archive unchanged.' >> "$GITHUB_STEP_SUMMARY"
+            exit 0
           fi
-
-      - name: Summarize result
-        if: always()
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data/bunjang-active.json
+          git commit -m 'Sync new Bunjang listings'
+          # A concurrent admin save must cause a rejected push, never an overwrite.
+          git push origin HEAD:main
+  publish:
+    needs: collect
+    if: always() && (needs.collect.result == 'success' || needs.collect.result == 'skipped')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/configure-pages@v5
+      - name: Prepare public files only
         run: |
-          if [[ "${{ steps.commit.outputs.changed }}" == 'true' ]]; then
-            echo 'New Bunjang items were added and committed to main.' >> "$GITHUB_STEP_SUMMARY"
-          elif [[ "${{ steps.commit.outputs.changed }}" == 'false' ]]; then
-            echo 'No new active Bunjang item IDs were found; the existing archive was left unchanged.' >> "$GITHUB_STEP_SUMMARY"
-          fi
+          mkdir -p _site
+          cp index.html manifest.webmanifest _site/
+          cp -R assets admin data _site/
+          rm -f _site/data/deploy-all-collector-final.html
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - name: Publish current main
+        id: deployment
+        uses: actions/deploy-pages@v4

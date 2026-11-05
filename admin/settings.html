@@ -1,10 +1,14 @@
 <!doctype html>
 <html lang="ko"><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="COLLECTOR ADMIN">
+<meta name="robots" content="noindex,nofollow">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://api.github.com; img-src 'self' data: blob: https:; style-src 'self'; script-src 'self'; base-uri 'none'; form-action 'none'">
-<title>SITE / MENU ADMIN · ALL COLLECTOR</title><link rel="stylesheet" href="admin.css"><script src="settings.js" defer></script>
+<title>SITE / MENU ADMIN · ALL COLLECTOR</title><link rel="stylesheet" href="admin.css"><script src="vault.js?v=20261105" defer></script>
+<script src="settings.js?v=20261105" defer></script>
 </head><body>
-<header class="topbar"><a class="wordmark" href="../">ALL COLLECTOR <span>SITE / MENU ADMIN</span></a><div class="top-actions"><span id="connectionState" class="connection">연결 안 됨</span><a class="text-button" href="./">COLLECTION</a><a class="text-button" href="cover.html">COVER</a><a class="text-button" href="information.html">INFORMATION</a><a class="text-button" href="../" target="_blank" rel="noopener">사이트 보기 ↗</a></div></header>
+<header class="topbar"><a class="wordmark" href="../">ALL COLLECTOR <span>SITE / MENU ADMIN</span></a><div class="top-actions"><span id="connectionState" class="connection">연결 안 됨</span><a class="text-button" href="./">COLLECTION</a><a class="text-button" href="cover.html">COVER</a><a class="text-button" href="information.html">INFORMATION</a><a class="text-button" href="../">사이트 보기 ↗</a></div></header>
 <main>
 <section id="loginPanel" class="login-panel"><p class="kicker">PRIVATE EDITOR</p><h1>SITE / MENU 관리</h1><p>홈페이지 소개 문구와 외부 메뉴 링크를 수정합니다. 상품과 INFORMATION 데이터는 건드리지 않습니다.</p>
 <div id="passwordLogin" hidden><label class="token-field">관리자 비밀번호<input id="unlockPassword" type="password" autocomplete="current-password" placeholder="기존 관리자 비밀번호"></label><button id="unlockButton" class="primary wide" type="button">비밀번호로 열기</button><button id="useTokenButton" class="text-button login-switch" type="button">토큰으로 연결</button></div>
@@ -21,3 +25,4 @@
 <label>기본 가격 표시<select id="priceMode"><option value="hidden">비표시</option><option value="sale">판매 중만</option><option value="all">항상</option></select></label>
 </div><div class="savebar"><p id="saveMessage" role="status"></p><button id="saveButton" class="primary" type="submit">저장하고 사이트에 반영</button></div></form></section>
 </main><div id="toast" class="toast" role="status" aria-live="polite" hidden></div></body></html>
+
