@@ -2,8 +2,25 @@
   "generated_at": "2026-11-05",
   "source": "Bunjang / 올콜렉터 shop 4934829",
   "rule": "Existing archive preserved. Apify seller export filtered to sellerId 4934829, status 판매중, updated after 2026-09-20, and deduplicated by product ID.",
-  "count": 445,
+  "count": 446,
   "items": [
+    {
+      "id": "BJ-446138020",
+      "category": "shoes",
+      "brand": "NIKE",
+      "source": "bunjang",
+      "title": "1995 나이키 에어포스 1 하이 sc",
+      "source_url": "https://m.bunjang.co.kr/products/446138020",
+      "image": "https://media.bunjang.co.kr/product/446138020_1_1793892198_w360.jpg",
+      "price_krw": 250000,
+      "status": "for_sale",
+      "status_text": "판매 중",
+      "checked_at": "2026-11-05",
+      "description": "번개장터 올콜렉터 상점에서 자동 수집.",
+      "size": "",
+      "year": 1995,
+      "added_at": "2026-11-05T16:25:10.362815+00:00"
+    },
     {
       "id": "BJ-446127900",
       "category": "shoes",
