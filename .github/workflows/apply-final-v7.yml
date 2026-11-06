@@ -1,0 +1,145 @@
+name: Apply ALL COLLECTOR final v7
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: all-collector-final-v7
+  cancel-in-progress: false
+
+jobs:
+  apply-and-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out current main
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Validate live data and apply v7 payload
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import base64
+          import json
+          import re
+          from pathlib import Path
+
+          installer = Path('data/all-collector-complete-installer-20261104-v7.html')
+          if not installer.is_file():
+              raise SystemExit('STOP: v7 installer is missing from data/.')
+
+          html = installer.read_text(encoding='utf-8')
+          match = re.search(r'const FILES=(\{.*?\});\s*const keys=', html, re.S)
+          if not match:
+              raise SystemExit('STOP: v7 payload could not be read.')
+          files = json.loads(match.group(1))
+
+          expected = {
+              '.github/workflows/bunjang-sync.yml',
+              'scripts/sync_bunjang.py',
+              'admin/admin.js',
+              'admin/index.html',
+              'admin/cover.js',
+              'admin/cover.html',
+              'admin/information.js',
+              'admin/information.html',
+              'admin/settings.js',
+              'admin/settings.html',
+              'assets/site.js',
+              'index.html',
+          }
+          if set(files) != expected:
+              raise SystemExit('STOP: v7 payload file list is not the verified 12-file set.')
+
+          protected = {
+              'data/bunjang-active.json',
+              'data/personal-posts.json',
+              'data/admin-overrides.json',
+              'assets/archive-room-cover.jpg',
+          }
+          if protected.intersection(files):
+              raise SystemExit('STOP: protected operating data appeared in the payload.')
+
+          def read_json(path):
+              return json.loads(Path(path).read_text(encoding='utf-8'))
+
+          active = read_json('data/bunjang-active.json')
+          personal = read_json('data/personal-posts.json')
+
+          def items_from(data):
+              if isinstance(data, list):
+                  return data
+              if isinstance(data, dict) and isinstance(data.get('items'), list):
+                  return data['items']
+              return []
+
+          active_items = items_from(active)
+          personal_items = items_from(personal)
+          if len(active_items) < 442:
+              raise SystemExit(f'STOP: current Bunjang data has only {len(active_items)} items.')
+          if len(personal_items) < 7:
+              raise SystemExit(f'STOP: current personal data has only {len(personal_items)} items.')
+
+          def is_armani_cap(item):
+              text = ' '.join(str(item.get(k, '')) for k in ('title', 'brand', 'source_url')).lower()
+              return ('armani' in text or '아르마니' in text or '433998678' in text)
+
+          if not any(is_armani_cap(item) for item in personal_items):
+              raise SystemExit('STOP: the preserved Armani red cap record was not found.')
+
+          decoded = {}
+          for rel, encoded in files.items():
+              try:
+                  decoded[rel] = base64.b64decode(encoded, validate=True)
+              except Exception as exc:
+                  raise SystemExit(f'STOP: invalid payload for {rel}: {exc}')
+
+          for rel, body in decoded.items():
+              path = Path(rel)
+              path.parent.mkdir(parents=True, exist_ok=True)
+              path.write_bytes(body)
+
+          for old in (
+              'data/all-collector-complete-installer-20261104-v7.html',
+              'data/all-collector-complete-installer-20261104-v6.html',
+              'data/all-collector-complete-installer-20261104-v5.html',
+              'data/all-collector-complete-installer-20261104-v4.html',
+              'data/all-collector-complete-installer-20261104-v3.html',
+          ):
+              Path(old).unlink(missing_ok=True)
+
+          # The temporary installer workflow removes itself after this run.
+          Path('.github/workflows/apply-final-v7.yml').unlink(missing_ok=True)
+
+          for rel, body in decoded.items():
+              if Path(rel).read_bytes() != body:
+                  raise SystemExit(f'STOP: post-write verification failed for {rel}.')
+
+          print(f'Protected live data verified: Bunjang {len(active_items)}, personal {len(personal_items)}.')
+          print('All 12 v7 files applied and verified byte-for-byte.')
+          PY
+
+      - name: Commit verified update to main
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes were needed."
+          else
+            git commit -m "Apply verified ALL COLLECTOR final v7"
+            git push origin HEAD:main
+          fi
+          echo "COMMIT_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+
+      - name: Final report
+        shell: bash
+        run: |
+          echo "ALL COLLECTOR v7 applied successfully."
+          echo "Commit: $COMMIT_SHA"

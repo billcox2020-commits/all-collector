@@ -1,0 +1,194 @@
+name: Finalize newest-first and sync Bunjang v2
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: all-collector-finalize-newest-first-v2
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out current main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Add current-code-compatible newest-first behavior
+        shell: python
+        run: |
+          from pathlib import Path
+
+          site_path = Path("assets/site.js")
+          admin_path = Path("admin/admin.js")
+          sync_path = Path("scripts/sync_bunjang.py")
+          for path in (site_path, admin_path, sync_path):
+              if not path.exists():
+                  raise SystemExit(f"Required file is missing: {path}")
+
+          site_marker = "/* ALL_COLLECTOR_NEWEST_FIRST_V2 */"
+          site_patch = r'''
+
+          /* ALL_COLLECTOR_NEWEST_FIRST_V2 */
+          function newestRecordTimeV2(item){
+            const direct=Date.parse(item?.added_at||item?.created_at||item?.updated_at||'');
+            if(Number.isFinite(direct))return direct;
+            const match=String(item?.id||'').match(/^ARCHIVE-([0-9A-Z]+)$/i);
+            if(match){const value=parseInt(match[1],36);if(Number.isFinite(value))return value}
+            const fallback=Date.parse(item?.checked_at||item?.published_at||'');
+            return Number.isFinite(fallback)?fallback:0;
+          }
+          const newestOriginalApplySiteSettingsV2=applySiteSettings;
+          applySiteSettings=function(){
+            site.featured_ids=[];
+            return newestOriginalApplySiteSettingsV2();
+          };
+          filteredItems=function(){
+            return items
+              .filter(item=>(category==='all'||item.category===category)&&(brand==='all'||item.brand===brand))
+              .sort((a,b)=>newestRecordTimeV2(b)-newestRecordTimeV2(a));
+          };
+          '''
+          site_text = site_path.read_text(encoding="utf-8")
+          if site_marker not in site_text:
+              required = ("function applySiteSettings", "function filteredItems", "let items=")
+              missing = [value for value in required if value not in site_text]
+              if missing:
+                  raise SystemExit(f"Guest code is incompatible; missing {missing}")
+              site_path.write_text(site_text.rstrip()+site_patch+"\n", encoding="utf-8")
+
+          admin_marker = "/* ALL_COLLECTOR_ADMIN_NEWEST_FIRST_V2 */"
+          admin_patch = r'''
+
+          /* ALL_COLLECTOR_ADMIN_NEWEST_FIRST_V2 */
+          function newestAdminRecordTimeV2(item){
+            const direct=Date.parse(item?.added_at||item?.created_at||item?.updated_at||'');
+            if(Number.isFinite(direct))return direct;
+            const match=String(item?.id||'').match(/^ARCHIVE-([0-9A-Z]+)$/i);
+            if(match){const value=parseInt(match[1],36);if(Number.isFinite(value))return value}
+            const fallback=Date.parse(item?.checked_at||item?.published_at||'');
+            return Number.isFinite(fallback)?fallback:0;
+          }
+          const newestOriginalRebuildRecordsV2=rebuildRecords;
+          rebuildRecords=function(){
+            newestOriginalRebuildRecordsV2();
+            records.sort((a,b)=>newestAdminRecordTimeV2(b)-newestAdminRecordTimeV2(a));
+          };
+          const newestOriginalFormRecordV2=formRecord;
+          formRecord=function(){
+            const item=newestOriginalFormRecordV2();
+            item.added_at=selected?.added_at||new Date().toISOString();
+            return item;
+          };
+          '''
+          admin_text = admin_path.read_text(encoding="utf-8")
+          if admin_marker not in admin_text:
+              required = ("function rebuildRecords", "function formRecord", "let records=")
+              missing = [value for value in required if value not in admin_text]
+              if missing:
+                  raise SystemExit(f"Admin code is incompatible; missing {missing}")
+              admin_path.write_text(admin_text.rstrip()+admin_patch+"\n", encoding="utf-8")
+
+          # Future syncs also stamp only genuinely unseen Bunjang products.
+          sync_text = sync_path.read_text(encoding="utf-8")
+          stamp = 'candidate["added_at"] = datetime.now(timezone.utc).isoformat()'
+          if stamp not in sync_text:
+              import re
+              pattern = r'(?m)^(\s*)candidate\s*=\s*normalize\(item\s*,\s*pid\)\s*$'
+              match = re.search(pattern, sync_text)
+              if not match:
+                  raise SystemExit("Bunjang new-item normalization line was not found.")
+              indent = match.group(1)
+              replacement = match.group(0) + "\n" + indent + stamp
+              sync_text = sync_text[:match.start()] + replacement + sync_text[match.end():]
+              sync_path.write_text(sync_text, encoding="utf-8")
+
+      - name: Remember existing Bunjang IDs
+        shell: python
+        run: |
+          import json
+          data=json.load(open('data/bunjang-active.json',encoding='utf-8'))
+          ids=[str(item.get('id','')) for item in data.get('items',[]) if item.get('id')]
+          json.dump(ids,open('/tmp/existing-bunjang-ids.json','w',encoding='utf-8'))
+          print(f'Existing Bunjang IDs: {len(ids)}')
+
+      - name: Fetch current Bunjang seller listings
+        env:
+          APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$APIFY_TOKEN" || { echo "::error::APIFY_TOKEN is missing."; exit 1; }
+          curl --fail-with-body --silent --show-error --retry 2 --max-time 330 \
+            -X POST -H 'Content-Type: application/json' \
+            --data '{"seller":"4934829","maxResults":1000,"sortBy":"date","skipAds":true,"delayBetweenPages":1}' \
+            "https://api.apify.com/v2/acts/16Y8KDUNZ5NXdSOLX/run-sync-get-dataset-items?token=${APIFY_TOKEN}&format=json&clean=true&limit=1000" \
+            --output bunjang-actor-items.json
+
+      - name: Add only unseen active Bunjang products
+        run: python scripts/sync_bunjang.py
+
+      - name: Stamp newly added products and verify preservation
+        shell: python
+        run: |
+          import json
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          active_path=Path('data/bunjang-active.json')
+          active=json.loads(active_path.read_text(encoding='utf-8'))
+          personal=json.load(open('data/personal-posts.json',encoding='utf-8'))
+          old=set(json.load(open('/tmp/existing-bunjang-ids.json',encoding='utf-8')))
+          now=datetime.now(timezone.utc).isoformat()
+          new=[]
+          for item in active.get('items',[]):
+              if str(item.get('id','')) not in old:
+                  item.setdefault('added_at',now)
+                  new.append(item)
+          active_path.write_text(json.dumps(active,ensure_ascii=False,indent=2)+"\n",encoding='utf-8')
+
+          active_items=active.get('items',[])
+          personal_items=personal.get('items',[])
+          assert len(active_items)>=443, f'Bunjang archive shrank: {len(active_items)}'
+          assert len(personal_items)>=8, f'Personal archive shrank: {len(personal_items)}'
+          assert any('armani' in str(x.get('title','')).lower() and 'hat' in str(x.get('title','')).lower() for x in personal_items), 'Armani hat is missing'
+          assert any(len(x.get('gallery') or [])>=1 for x in personal_items), 'Multi-photo personal record is missing'
+          print(f'Verified {len(active_items)} Bunjang + {len(personal_items)} personal records')
+          print(f'New Bunjang products added: {len(new)}')
+          for item in new[:20]:
+              print(f"NEW: {item.get('id')} | {item.get('title')}")
+
+      - name: Check JavaScript and Python syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check assets/site.js
+          node --check admin/admin.js
+          python -m py_compile scripts/sync_bunjang.py
+
+      - name: Commit verified changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add scripts/sync_bunjang.py assets/site.js admin/admin.js data/bunjang-active.json
+          if git diff --cached --quiet; then
+            echo "No new products or code changes remained to commit."
+            exit 0
+          fi
+          unexpected="$(git diff --cached --name-only | grep -Ev '^(scripts/sync_bunjang.py|assets/site.js|admin/admin.js|data/bunjang-active.json)$' || true)"
+          test -z "$unexpected" || { echo "::error::Unexpected files: $unexpected"; exit 1; }
+          git commit -m "Show newest archive records first and sync Bunjang"
+          git push origin HEAD:main

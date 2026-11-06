@@ -1,0 +1,66 @@
+name: Sync Bunjang direct (no task ID)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: all-collector-bunjang-direct
+  cancel-in-progress: false
+
+jobs:
+  sync-and-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out current main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Fetch current Bunjang seller listings
+        env:
+          APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "$APIFY_TOKEN" ]]; then
+            echo "::error::APIFY_TOKEN is missing from repository Actions secrets."
+            exit 1
+          fi
+          curl --fail-with-body --silent --show-error --retry 2 \
+            --max-time 330 \
+            -X POST \
+            -H 'Content-Type: application/json' \
+            --data '{"seller":"4934829","maxResults":1000,"sortBy":"date","skipAds":true,"delayBetweenPages":1}' \
+            "https://api.apify.com/v2/acts/16Y8KDUNZ5NXdSOLX/run-sync-get-dataset-items?token=${APIFY_TOKEN}&format=json&clean=true&limit=1000" \
+            --output bunjang-actor-items.json
+
+      - name: Add unseen active products only
+        run: python scripts/sync_bunjang.py
+
+      - name: Commit only the Bunjang archive when changed
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- data/bunjang-active.json; then
+            echo "No new Bunjang product was found."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/bunjang-active.json
+          changed="$(git diff --cached --name-only)"
+          if [[ "$changed" != "data/bunjang-active.json" ]]; then
+            echo "::error::Unexpected files were staged: $changed"
+            exit 1
+          fi
+          git commit -m "Sync new Bunjang listings"
+          git push origin HEAD:main
