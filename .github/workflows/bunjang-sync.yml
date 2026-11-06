@@ -12,6 +12,7 @@ concurrency:
 
 jobs:
   sync-and-publish:
+    if: ${{ false }} # Legacy paid/code-rewriting workflow disabled in free mode.
     runs-on: ubuntu-latest
     steps:
       - name: Check out archive

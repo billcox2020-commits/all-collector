@@ -12,6 +12,7 @@ concurrency:
 
 jobs:
   apply-and-verify:
+    if: ${{ false }} # Legacy paid/code-rewriting workflow disabled in free mode.
     runs-on: ubuntu-latest
     steps:
       - name: Check out current main

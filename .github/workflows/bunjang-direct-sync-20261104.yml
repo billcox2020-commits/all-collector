@@ -1,93 +1,52 @@
-name: Sync Bunjang direct (no task ID)
-
+name: Sync Bunjang public listings (no Apify)
 on:
   workflow_dispatch:
   push:
     branches: [main]
     paths: ['.github/bunjang-request.json']
-
 permissions:
   contents: write
-
 concurrency:
   group: all-collector-pages
   cancel-in-progress: false
-
+env:
+  BUNJANG_RAW_PATH: bunjang-public-items.json
 jobs:
   sync-and-publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
-      - name: Check out current main
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           ref: main
           fetch-depth: 0
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-node@v4
         with:
-          python-version: "3.12"
-
-      - name: Fetch current Bunjang seller listings
-        env:
-          APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
-        shell: bash
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate public-record filters
+        run: node --test tests/bunjang-public-records.test.mjs
+      - name: Install standard public-page browser
         run: |
-          set -euo pipefail
-          if [[ -z "$APIFY_TOKEN" ]]; then
-            echo "::error::APIFY_TOKEN is missing from repository Actions secrets."
-            exit 1
-          fi
-          curl --fail-with-body --silent --show-error \
-            --max-time 330 \
-            -X POST \
-            -H 'Content-Type: application/json' \
-            -H "Authorization: Bearer ${APIFY_TOKEN}" \
-            --data '{"seller":"4934829","maxResults":1000,"sortBy":"date","skipAds":true,"delayBetweenPages":1}' \
-            "https://api.apify.com/v2/acts/16Y8KDUNZ5NXdSOLX/run-sync-get-dataset-items?format=json&clean=true&limit=1000" \
-            --output bunjang-actor-items.json
-
-      - name: Explain Apify failures without exposing credentials
-        if: failure()
-        env:
-          APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
-        shell: python
-        run: |
-          import json, os
-          from pathlib import Path
-          path = Path("bunjang-actor-items.json")
-          if path.exists():
-              try:
-                  body = json.loads(path.read_text())
-                  error = body.get("error", {}) if isinstance(body, dict) else {}
-                  message = str(error.get("message", "Apify collection failed."))[:500]
-                  token = os.environ.get("APIFY_TOKEN", "")
-                  if token:
-                      message = message.replace(token, "[redacted]")
-                  message = message.replace("%", "%25").replace("\\r", "%0D").replace("\\n", "%0A")
-                  print("::error::" + message)
-              except (ValueError, OSError):
-                  print("::error::Apify returned no readable JSON error. Check the failed fetch step.")
-
-      - name: Add unseen active products only
+          npm install --no-save --package-lock=false playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Read public seller page without paid services
+        run: node scripts/fetch_bunjang_public.mjs
+      - name: Append unseen products with existing preservation rules
         run: python scripts/sync_bunjang.py
-
-      - name: Commit only the Bunjang archive when changed
+      - name: Commit only newly collected products
         shell: bash
         run: |
           set -euo pipefail
           if git diff --quiet -- data/bunjang-active.json; then
-            echo "No new Bunjang product was found."
+            echo 'No new products. Existing records unchanged.' >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add data/bunjang-active.json
-          changed="$(git diff --cached --name-only)"
-          if [[ "$changed" != "data/bunjang-active.json" ]]; then
-            echo "::error::Unexpected files were staged: $changed"
-            exit 1
-          fi
-          git commit -m "Sync new Bunjang listings"
+          test "$(git diff --cached --name-only)" = 'data/bunjang-active.json'
+          git commit -m 'Append new public Bunjang listings'
           git push origin HEAD:main
