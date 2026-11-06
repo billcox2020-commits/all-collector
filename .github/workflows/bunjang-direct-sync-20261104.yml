@@ -2,17 +2,21 @@ name: Sync Bunjang direct (no task ID)
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/bunjang-request.json']
 
 permissions:
   contents: write
 
 concurrency:
-  group: all-collector-bunjang-direct
+  group: all-collector-pages
   cancel-in-progress: false
 
 jobs:
   sync-and-publish:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Check out current main
         uses: actions/checkout@v4
@@ -35,13 +39,36 @@ jobs:
             echo "::error::APIFY_TOKEN is missing from repository Actions secrets."
             exit 1
           fi
-          curl --fail-with-body --silent --show-error --retry 2 \
+          curl --fail-with-body --silent --show-error \
             --max-time 330 \
             -X POST \
             -H 'Content-Type: application/json' \
+            -H "Authorization: Bearer ${APIFY_TOKEN}" \
             --data '{"seller":"4934829","maxResults":1000,"sortBy":"date","skipAds":true,"delayBetweenPages":1}' \
-            "https://api.apify.com/v2/acts/16Y8KDUNZ5NXdSOLX/run-sync-get-dataset-items?token=${APIFY_TOKEN}&format=json&clean=true&limit=1000" \
+            "https://api.apify.com/v2/acts/16Y8KDUNZ5NXdSOLX/run-sync-get-dataset-items?format=json&clean=true&limit=1000" \
             --output bunjang-actor-items.json
+
+      - name: Explain Apify failures without exposing credentials
+        if: failure()
+        env:
+          APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
+        shell: python
+        run: |
+          import json, os
+          from pathlib import Path
+          path = Path("bunjang-actor-items.json")
+          if path.exists():
+              try:
+                  body = json.loads(path.read_text())
+                  error = body.get("error", {}) if isinstance(body, dict) else {}
+                  message = str(error.get("message", "Apify collection failed."))[:500]
+                  token = os.environ.get("APIFY_TOKEN", "")
+                  if token:
+                      message = message.replace(token, "[redacted]")
+                  message = message.replace("%", "%25").replace("\\r", "%0D").replace("\\n", "%0A")
+                  print("::error::" + message)
+              except (ValueError, OSError):
+                  print("::error::Apify returned no readable JSON error. Check the failed fetch step.")
 
       - name: Add unseen active products only
         run: python scripts/sync_bunjang.py
