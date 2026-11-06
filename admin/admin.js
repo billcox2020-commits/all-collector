@@ -61,10 +61,52 @@ function randomBytes(length){const bytes=new Uint8Array(length);crypto.getRandom
 
 function base64ToBytes(value){return Uint8Array.from(atob(value),character=>character.charCodeAt(0))}
 
-function localVault(){return ArchiveVault.current()}
-async function readPersistentVault(){return vaultCache=await ArchiveVault.read()}
-async function writePersistentVault(value){await ArchiveVault.write(value);vaultCache=ArchiveVault.current()}
-async function deletePersistentVault(){await ArchiveVault.remove();vaultCache=''}
+function localVault(){try{return localStorage.getItem(VAULT_KEY)||localStorage.getItem(LEGACY_VAULT_KEY)||''}catch{return ''}}
+
+function openVaultDb(){
+  return new Promise((resolve,reject)=>{
+    if(!('indexedDB' in window)){reject(new Error('영구 저장소를 사용할 수 없습니다.'));return}
+    const request=indexedDB.open(VAULT_DB,1);
+    request.onupgradeneeded=()=>{if(!request.result.objectStoreNames.contains(VAULT_STORE))request.result.createObjectStore(VAULT_STORE)};
+    request.onsuccess=()=>resolve(request.result);
+    request.onerror=()=>reject(request.error||new Error('영구 저장소를 열 수 없습니다.'));
+  });
+}
+
+async function readPersistentVault(){
+  const local=localVault();
+  if(local){
+    vaultCache=local;
+    try{
+      const db=await openVaultDb();
+      await new Promise((resolve,reject)=>{const request=db.transaction(VAULT_STORE,'readwrite').objectStore(VAULT_STORE).put(local,VAULT_KEY);request.onsuccess=()=>resolve();request.onerror=()=>reject(request.error)});
+      db.close();
+      try{await navigator.storage?.persist?.()}catch{}
+    }catch{}
+    return local;
+  }
+  try{
+    const db=await openVaultDb();
+    const saved=await new Promise((resolve,reject)=>{const request=db.transaction(VAULT_STORE,'readonly').objectStore(VAULT_STORE).get(VAULT_KEY);request.onsuccess=()=>resolve(request.result||'');request.onerror=()=>reject(request.error)});
+    db.close();
+    if(saved){vaultCache=saved;try{localStorage.setItem(VAULT_KEY,saved)}catch{}}
+    return saved;
+  }catch{return ''}
+}
+
+async function writePersistentVault(serialized){
+  vaultCache=serialized;
+  try{localStorage.setItem(VAULT_KEY,serialized)}catch{}
+  const db=await openVaultDb();
+  await new Promise((resolve,reject)=>{const request=db.transaction(VAULT_STORE,'readwrite').objectStore(VAULT_STORE).put(serialized,VAULT_KEY);request.onsuccess=()=>resolve();request.onerror=()=>reject(request.error)});
+  db.close();
+  try{await navigator.storage?.persist?.()}catch{}
+}
+
+async function deletePersistentVault(){
+  vaultCache='';try{localStorage.removeItem(VAULT_KEY)}catch{}
+  try{const db=await openVaultDb();await new Promise((resolve,reject)=>{const request=db.transaction(VAULT_STORE,'readwrite').objectStore(VAULT_STORE).delete(VAULT_KEY);request.onsuccess=()=>resolve();request.onerror=()=>reject(request.error)});db.close()}catch{}
+}
 
 async function passwordKey(password,salt){
   const material=await crypto.subtle.importKey('raw',encoder.encode(password),'PBKDF2',false,['deriveKey']);
@@ -130,29 +172,21 @@ async function getJsonFile(path,ref=BRANCH){
 
 function normalizeChanges(value){
   return {
-    ...value,
     hidden_ids:Array.isArray(value?.hidden_ids)?value.hidden_ids:[],
     overrides:value?.overrides&&typeof value.overrides==='object'?value.overrides:{}
   };
 }
 
-function recordTime(item){
-  const direct=Date.parse(item?.added_at||item?.created_at||'');
-  if(Number.isFinite(direct))return direct;
-  const match=String(item?.id||'').match(/^ARCHIVE-([0-9A-Z]+)$/i);
-  if(match)return parseInt(match[1],36)||0;
-  return Date.parse(item?.published_at||item?.checked_at||'')||0;
-}
 function rebuildRecords(){
   const hidden=new Set(changes.hidden_ids);
-  const active=rawActive;
+  const active=rawActive.filter(item=>item.status==='for_sale');
   records=[
     ...rawPersonal.map(item=>({...item,_origin:'personal'})),
     ...active.map(item=>({...item,_origin:'active'}))
   ].filter(item=>!hidden.has(item.id)).map(item=>{
     const override=changes.overrides[item.id];
     return override?{...item,...override,id:item.id,source:item.source,_origin:item._origin}:item;
-  }).sort((a,b)=>recordTime(b)-recordTime(a));
+  });
 }
 
 function publicImage(value){
@@ -262,8 +296,7 @@ function formRecord(){
     status_text:$('#statusTextInput').value.trim(),
     description:$('#descriptionInput').value.trim(),
     published_at:$('#publishedInput').value||null,
-    source_url:$('#sourceUrlInput').value.trim(),
-    added_at:selected?(selected.added_at||new Date(recordTime(selected)||0).toISOString()):new Date().toISOString()
+    source_url:$('#sourceUrlInput').value.trim()
   };
 }
 
@@ -379,7 +412,7 @@ async function hideRecord(){
     const ref=await api(`/repos/${OWNER}/${REPO}/git/ref/heads/${BRANCH}`);
     const latest=await latestData(ref.object.sha);
     if(!latest.changes.hidden_ids.includes(selected.id))latest.changes.hidden_ids.push(selected.id);
-    // Keep the edit history when hiding a record.
+    delete latest.changes.overrides[selected.id];
     await commitFiles([jsonEntry(PATHS.changes,latest.changes)],`Hide archive record: ${selected.title}`,ref.object.sha);
     showToast('사이트에서 삭제했습니다.');await loadRecords();setBusy(false);closeEditor();
   }catch(error){saveMessage.textContent=humanError(error)}finally{setBusy(false)}
@@ -416,19 +449,17 @@ async function connectWithToken(candidate){
   try{
     const [user,repo]=await Promise.all([api('/user'),api(`/repos/${OWNER}/${REPO}`)]);
     if(repo.permissions&&!repo.permissions.push)throw new Error('이 저장소에 쓰기 권한이 없습니다.');
-    username=user.login;try{sessionStorage.setItem(TOKEN_KEY,token)}catch{};await loadRecords();
+    username=user.login;sessionStorage.setItem(TOKEN_KEY,token);await loadRecords();
     loginPanel.hidden=true;workspace.hidden=false;disconnectButton.hidden=false;passwordButton.hidden=false;
     passwordButton.textContent=hasTokenVault()?'비밀번호 변경':'비밀번호 설정';
     connectionState.textContent=`${username} 연결됨`;connectionState.classList.add('on');
     if(matchMedia('(max-width:860px)').matches)closeEditor();else openEditor(null);
     if(!hasTokenVault())setTimeout(openPasswordDialog,0);
-  }catch(error){token='';try{sessionStorage.removeItem(TOKEN_KEY)}catch{};loginError.textContent=humanError(error)}finally{connectButton.disabled=false;unlockButton.disabled=false;connectButton.textContent='관리 화면 연결'}
+  }catch(error){token='';sessionStorage.removeItem(TOKEN_KEY);loginError.textContent=humanError(error)}finally{connectButton.disabled=false;unlockButton.disabled=false;connectButton.textContent='관리 화면 연결'}
 }
 
-function sessionToken(){try{return sessionStorage.getItem(TOKEN_KEY)||''}catch{return ''}}
-
 async function connect(){
-  const candidate=tokenInput.value.trim()||sessionToken()||'';
+  const candidate=tokenInput.value.trim()||sessionStorage.getItem(TOKEN_KEY)||'';
   await connectWithToken(candidate);
 }
 
@@ -458,11 +489,11 @@ async function storePassword(event){
 }
 
 async function removeSavedLogin(){
-  try{await deletePersistentVault()}catch(error){passwordError.textContent=error.message;return}passwordDialog.close();passwordButton.textContent='비밀번호 설정';showToast('이 기기의 저장된 로그인을 삭제했습니다.');
+  await deletePersistentVault();passwordDialog.close();passwordButton.textContent='비밀번호 설정';showToast('이 기기의 저장된 로그인을 삭제했습니다.');
 }
 
 function disconnect(){
-  token='';username='';try{sessionStorage.removeItem(TOKEN_KEY)}catch{};workspace.hidden=true;loginPanel.hidden=false;disconnectButton.hidden=true;passwordButton.hidden=true;
+  token='';username='';sessionStorage.removeItem(TOKEN_KEY);workspace.hidden=true;loginPanel.hidden=false;disconnectButton.hidden=true;passwordButton.hidden=true;
   connectionState.textContent='연결 안 됨';connectionState.classList.remove('on');tokenInput.value='';loginError.textContent='';
   showLoginMode();
 }
@@ -537,7 +568,28 @@ restoreInput.addEventListener('change',async()=>{
 async function initializeAdmin(){
   vaultCache=await readPersistentVault();
   showLoginMode();
-  if(sessionToken())connect();
+  if(sessionStorage.getItem(TOKEN_KEY))connect();
 }
 initializeAdmin();
+
+/* ALL_COLLECTOR_ADMIN_NEWEST_FIRST_V2 */
+function newestAdminRecordTimeV2(item){
+  const direct=Date.parse(item?.added_at||item?.created_at||item?.updated_at||'');
+  if(Number.isFinite(direct))return direct;
+  const match=String(item?.id||'').match(/^ARCHIVE-([0-9A-Z]+)$/i);
+  if(match){const value=parseInt(match[1],36);if(Number.isFinite(value))return value}
+  const fallback=Date.parse(item?.checked_at||item?.published_at||'');
+  return Number.isFinite(fallback)?fallback:0;
+}
+const newestOriginalRebuildRecordsV2=rebuildRecords;
+rebuildRecords=function(){
+  newestOriginalRebuildRecordsV2();
+  records.sort((a,b)=>newestAdminRecordTimeV2(b)-newestAdminRecordTimeV2(a));
+};
+const newestOriginalFormRecordV2=formRecord;
+formRecord=function(){
+  const item=newestOriginalFormRecordV2();
+  item.added_at=selected?.added_at||new Date().toISOString();
+  return item;
+};
 

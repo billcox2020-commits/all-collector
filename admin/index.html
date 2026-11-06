@@ -3,16 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<link rel="manifest" href="manifest.webmanifest">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="COLLECTOR ADMIN">
 <meta name="robots" content="noindex,nofollow">
 <meta name="description" content="ALL COLLECTOR ARCHIVE 기록 관리">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://api.github.com; img-src 'self' data: blob: https:; style-src 'self'; script-src 'self'; base-uri 'none'; form-action 'none'">
 <title>ARCHIVE ADMIN · ALL COLLECTOR</title>
 <link rel="stylesheet" href="admin.css">
-<script src="vault.js?v=20261105" defer></script>
-<script src="admin.js?v=20261105" defer></script>
+<script src="admin.js" defer></script>
 </head>
 <body>
 <header class="topbar">
@@ -24,7 +20,7 @@
     <a class="text-button" href="cover.html">COVER</a>
     <a class="text-button" href="information.html">INFORMATION</a>
     <a class="text-button" href="settings.html">SITE / MENU</a>
-    <a class="text-button" href="../">사이트 보기 ↗</a>
+    <a class="text-button" href="../" target="_blank" rel="noopener">사이트 보기 ↗</a>
   </div>
 </header>
 
@@ -64,4 +60,3 @@
 <dialog id="passwordDialog" class="password-dialog"><form id="passwordForm" method="dialog"><button id="closePasswordDialog" class="dialog-close" type="button" aria-label="닫기">×</button><p class="kicker">THIS DEVICE ONLY</p><h2>관리자 비밀번호 설정</h2><p>현재 GitHub 연결 정보를 이 기기에 암호화해 저장합니다. 다음부터 이 비밀번호로 관리자 화면을 열 수 있습니다.</p><label>새 비밀번호<input id="newPassword" type="password" autocomplete="new-password" minlength="4" required></label><label>비밀번호 확인<input id="confirmPassword" type="password" autocomplete="new-password" minlength="4" required></label><p id="passwordError" class="error" role="alert"></p><button id="savePasswordButton" class="primary wide" type="submit">비밀번호 저장</button><button id="removeSavedLoginButton" class="text-button remove-login" type="button" hidden>이 기기의 저장된 로그인 삭제</button></form></dialog>
 <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 </body></html>
-
