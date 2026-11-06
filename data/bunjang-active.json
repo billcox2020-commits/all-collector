@@ -1,9 +1,25 @@
 {
-  "generated_at": "2026-11-05",
+  "generated_at": "2026-11-06",
   "source": "Bunjang / 올콜렉터 shop 4934829",
   "rule": "Existing archive preserved. Apify seller export filtered to sellerId 4934829, status 판매중, updated after 2026-09-20, and deduplicated by product ID.",
-  "count": 446,
+  "count": 447,
   "items": [
+    {
+      "id": "BJ-446181027",
+      "category": "outer",
+      "brand": "THE NORTH FACE",
+      "source": "bunjang",
+      "title": "노스페이스 800필 눕시 푸퍼 레드 윈드스토퍼",
+      "source_url": "https://m.bunjang.co.kr/products/446181027",
+      "image": "https://media.bunjang.co.kr/product/446181027_1_1793926308_w400.jpg",
+      "price_krw": 999999,
+      "status": "for_sale",
+      "status_text": "판매 중",
+      "checked_at": "2026-11-06",
+      "description": "번개장터 올콜렉터 상점에서 자동 수집.",
+      "size": "",
+      "added_at": "2026-11-06T07:56:38.309357+00:00"
+    },
     {
       "id": "BJ-446138020",
       "category": "shoes",
