@@ -34,9 +34,9 @@
 
 `node --check assets/site.js`로 스크립트 문법을 확인합니다. GitHub Pages에서 `main` 브랜치 루트를 게시합니다.
 
-## 워크 채팅에서 번개장터 수집
+## 코덱스 창에서 번개장터 수집
 
-이 저장소에 접근할 수 있는 현재 워크 대화창에서 **번개장터 자료 긁어와줘**라고 요청합니다. 별도로 코덱스 창을 열거나 Actions 버튼을 누를 필요는 없습니다.
+앞으로는 GitHub 접근·쓰기와 실제 수집이 확인된 **코덱스 창에서만** **번개장터 자료 긁어와줘**라고 요청합니다. 별도 워크창은 GitHub 전용 도구가 없고 직접 GitHub 요청도 403 및 `Calls to this URL are not allowed`로 차단됐다고 보고되어, 현재 작업 창으로 사용하지 않습니다. 이는 현재 연결 상태에 따른 운영 기준입니다. 사용자가 Actions 버튼을 누를 필요는 없습니다.
 에이전트가 `AGENTS.md`에 따라 `.github/bunjang-request.json`을 main에 갱신하면
 번개장터 직접 수집 워크플로가 자동 실행됩니다. 사용자가 Actions 버튼을 누를 필요는 없습니다.
 
@@ -81,9 +81,9 @@ GitHub Connector 쓰기 403과는 다른 문제이며, 기존 상품 데이터�
 
 ## 최신 실행 결과 — 2026-11-09
 
-- 워크 대화창의 수집 요청으로 `.github/bunjang-request.json`을 갱신해 실제 수집을 실행했습니다.
+- 코덱스 대화창의 수집 요청으로 `.github/bunjang-request.json`을 갱신해 실제 수집을 실행했습니다.
 - 요청 커밋: `6752b73c431bb74e29a9bb9265df34c5190ebf7d`.
 - [수집 작업 성공](https://github.com/billcox2020-commits/all-collector/actions/runs/42576487320): 공개 상점에서 판매 중 60건을 확인했고, 날짜 기준을 통과한 59건 중 신규 상품 **5건**을 추가했습니다.
 - 저장 커밋: [`aaa096f`](https://github.com/billcox2020-commits/all-collector/commit/aaa096f).
-- [해당 자료의 Pages 배포 작업 성공](https://github.com/billcox2020-commits/all-collector/actions/runs/42576558835). 사용자 기기에서의 공개 화면 표시는 별도로 확인해야 합니다.
-- Apify는 호출하지 않았습니다. 다음 수집도 워크 대화창에서 요청하면 같은 공개 페이지 수집 경로를 사용합니다.
+- [해당 자료의 Pages 배포 작업 성공](https://github.com/billcox2020-commits/all-collector/actions/runs/42576558835). 사용자가 자료 업로드까지 확인했습니다.
+- Apify는 호출하지 않았습니다. 다음 수집도 코덱스 창에서 요청하면 같은 공개 페이지 수집 경로를 사용합니다.
