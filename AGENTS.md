@@ -1,4 +1,10 @@
-# ALL COLLECTOR work-chat collection
+# ALL COLLECTOR Codex collection
+
+## 현재 작업 창 — 2026-11-09
+
+사용자는 앞으로 번개장터 수집·관련 작업을 GitHub 접근과 쓰기가 확인된 코덱스 창에서만 요청하기로 정했습니다. 별도 워크창은 GitHub 전용 도구가 없고 직접 요청도 403 및 `Calls to this URL are not allowed`로 차단됐다고 보고됐습니다. 워크창에서도 현재 실행할 수 있다고 안내하지 마세요. 이는 현재 연결 상태에 따른 운영 기준이며, 모든 코덱스 창의 권한을 보장하는 뜻은 아닙니다. 실행 시 해당 코덱스 창의 실제 연결 권한을 확인하고 아래 요청 파일 경로를 사용합니다. 기존 `source: "work-chat"` 값과 파일명은 호환성을 위해 유지합니다.
+
+사용자는 2026-11-09 수집 결과의 자료 업로드까지 확인했습니다. 이번 안내 업데이트만으로 새 수집을 실행하지 않습니다.
 
 ## User requests
 When the user asks "번개장터 자료 긁어와줘", "번개장터자료 긁어와줘", "번개장터 불러와줘", or an equivalent request to collect this repository's Bunjang listings, execute the collection. Do not send the user to the Actions button when a connected write is available.
