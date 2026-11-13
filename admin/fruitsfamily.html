@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self'; img-src 'self'; style-src 'self'; script-src 'self'; base-uri 'none'; form-action 'none'">
+<title>후루츠 동기화 준비 · ALL COLLECTOR</title>
+<link rel="stylesheet" href="admin.css">
+<link rel="stylesheet" href="fruitsfamily.css">
+<script type="module" src="fruitsfamily.mjs"></script>
+</head>
+<body>
+<header class="topbar"><a class="wordmark" href="./">ALL COLLECTOR <span>ARCHIVE ADMIN</span></a><a href="./">관리자로 돌아가기</a></header>
+<main class="fruits-main">
+<h1>후루츠 동기화 준비</h1>
+<p>상품 1개를 검토하는 화면입니다. 실제 상품 등록과 기존 자료 변경은 실행하지 않습니다. 로그인 정보도 입력하지 않습니다.</p>
+<section aria-labelledby="official-title">
+<h2 id="official-title">번개장터 상품을 직접 가져오려면</h2>
+<p>후루츠 앱의 상품 업로드 화면에서 ‘타 플랫폼에서 상품 가져오기’를 확인하세요. 본인인증·정산계좌 등록 완료 계정에 제공되며, 계정당 1회·최근 판매 상품 최대 500개입니다. 이후 가격과 판매 상태는 연동되지 않습니다.</p>
+<p><strong>가져오기를 시작하면 상품이 바로 공개될 수 있으며 취소할 수 없습니다. 1개 시험 등록이나 단순 미리보기 용도로 시작하지 마세요.</strong></p>
+<p><a href="https://intercom.help/fruits-family-co/ko/articles/17028585" target="_blank" rel="noopener noreferrer">공식 가져오기 안내 ↗</a> · <a href="https://intercom.help/fruits-family-co/ko/articles/11977919" target="_blank" rel="noopener noreferrer">PC 업로드 자격 안내 ↗</a></p>
+</section>
+<section aria-labelledby="preview-title">
+<h2 id="preview-title">1개 상품 사진·상품명·가격 준비</h2>
+<p>사진·상품명·가격을 우선 옮기고 브랜드·카테고리·사이즈는 저장된 값을 참고합니다. 설명은 직접 보완할 수 있습니다. 현재 저장 목록은 대표 사진만 있으므로 전체 사진이 필요하면 번개장터 원본을 확인하세요.</p>
+<p>현재 저장된 후루츠 부분 목록과 대조합니다. 후보가 없어도 중복이 없다는 뜻은 아닙니다. 판매완료 상품도 대조 대상에 포함합니다.</p>
+<p id="inventory" role="status">저장 자료를 읽고 있습니다…</p>
+<label for="product">번개장터 상품 1개</label>
+<select id="product" disabled><option value="">선택하세요</option></select>
+<button id="prepare" type="button" disabled>1개 초안 확인</button>
+<p id="message" role="status"></p>
+<div id="result" hidden>
+<h3 id="summary"></h3>
+<p id="photo-count"></p><ul id="photos"></ul>
+<h3>필수 검토</h3><ul id="checks"></ul>
+<h3>중복 후보</h3><ul id="duplicates"></ul>
+<h3>변환 결과</h3><p>사진은 주소 목록이며 실제 사진 파일은 포함하지 않습니다. 브랜드·카테고리·사이즈는 등록 화면에서 선택할 참고값입니다.</p>
+<pre id="preview"></pre>
+<button id="download" type="button">이 상품 검토용 JSON 다운로드</button>
+<p>이 파일은 공식 대량 업로드 양식이 아닙니다. 실제 등록 전 승인과 현재 상품 대조가 필요합니다.</p>
+</div>
+</section>
+</main>
+</body>
+</html>

@@ -1,0 +1,6 @@
+.fruits-main{max-width:960px;margin:32px auto;padding:0 20px 60px;line-height:1.7}
+.fruits-main section{border-top:1px solid #ccc;margin-top:28px;padding-top:18px}
+.fruits-main select{display:block;width:100%;max-width:100%;margin:12px 0;padding:12px}
+.fruits-main button{padding:10px 18px;margin:8px 0;cursor:pointer}
+.fruits-main pre{background:#f3f3f3;padding:16px;white-space:pre-wrap;overflow-wrap:anywhere}
+.fruits-main li{margin-bottom:8px}
