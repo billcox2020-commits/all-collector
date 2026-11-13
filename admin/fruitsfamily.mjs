@@ -41,15 +41,15 @@ $('download').addEventListener('click', () => {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 });
 try {
-  const [catalog, overrides, fruits, pool] = await Promise.all([
+  const [catalog, overrides, fruits] = await Promise.all([
     read('../data/bunjang-active.json'), read('../data/admin-overrides.json'),
-    read('../data/fruitsfamily.json'), read('../data/fruitsfamily-raw-pool-2026-09-16.json'),
+    read('../data/fruitsfamily-sale911-public.json'),
   ]);
-  if (!Array.isArray(catalog.items) || !Array.isArray(fruits.records) || !Array.isArray(pool.records)) throw Error('저장 자료 형식을 확인하세요.');
+  if (!Array.isArray(catalog.items) || !Array.isArray(fruits.records) || fruits.seller_id !== 'm5dx') throw Error('저장 자료 형식 또는 대상 상점을 확인하세요.');
   active = catalog.items; changes = overrides;
-  existing = [...new Map([...fruits.records, ...pool.records].map(row => [row.id, row])).values()];
+  existing = [...new Map(fruits.records.map(row => [row.id, row])).values()];
   const visible = effectiveItems(active, changes);
-  $('inventory').textContent = `번개장터 준비 대상 ${visible.length}개 · 후루츠 참고 목록 ${existing.length}개 (수집일 ${fruits.collected_at} / ${pool.collected_at}, 부분 목록)`;
+  $('inventory').textContent = `번개장터 준비 대상 ${visible.length}개 · 후루츠 sale911 공개 목록 ${existing.length}개 (확인 ${fruits.checked_at}). 공개 목록의 더보기까지 확인했으며 숨김 상품·현재 판매 상태는 미확인입니다.`;
   for (const item of visible) {
     const option = document.createElement('option'); option.value = item.id; option.textContent = `${item.id} · ${item.title}`; $('product').append(option);
   }
